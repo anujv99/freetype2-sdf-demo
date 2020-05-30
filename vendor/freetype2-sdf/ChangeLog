@@ -1,0 +1,172 @@
+2020-05-30  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	* sdfgen.h (Generate_SDF): added an `spread' parameter
+	  which is used to specify the maximum distance value.
+	  Any distance greater than it will be discarded.
+	  Also, now the distance is calculaed from the center of
+	  the pixel (previously is was being calculated from the
+	  bottom left corner).
+
+2020-05-30  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	[sdf-outline] renamed `contour' to `edge' since a contour
+	is used to represent a complete connected shape of edges
+	of different types.
+
+2020-05-29  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	[sdf-outline] replaced all `float' by a typedef `SDF_DataType'
+
+	* sdfgen.c (Generate_SDF): fixed a calculation error while
+	  white resolving conflict between two endpoints.
+	  Now if two curves are equidistant from a point we check if
+	  thier endpoints are connected and then use the curve which
+	  make higher orthogonality with the point to correctly determine
+	  the sign of the point.
+
+2020-05-28  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	[sdf-outline] finished the algorithm for generating signed
+	distnce fields from `FT_Outline'.
+
+	* sdfgen.c (get_min_distance): combined the output of the function
+	  to a struct `SDF_Signed_Distance'.
+
+2020-05-27  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	[sdf-outline] finished the algorithm which return shortest
+	distance from a point to line and quadratic/cubic bezier curve.
+
+	* sdfgen.c (solve_quintic_equation, solve_quartic_equation):
+	  removed becuase no longer using.
+	* sdfgen.c (get_min_distance): changed the process for calculating
+	  shortest distance from a point to a cubic bezier.
+	  At first the process was to calculate the roots of a 5th degree
+	  polynomial, but it was rather slow and did not yeild proper
+	  results.
+	  So, now the function first assumes the point which is nearest
+	  to the cubci curve and then improve is using Newton-Raphson's
+	  method.
+	  The function is now complete and return shortest distance as
+	  well as the direction at the nearest from all three curves.
+
+2020-05-25  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	* sdfgen.c (solve_quintic_equation): finished the algorithm to
+	  compute roots of a 5th degree polynomial equation. First the
+	  ranges in which the roots lie are calculated using isolator
+	  polynomials and then Newton-Raphson's method is used to find
+	  the approximate roots within the  ranges.
+	* sdfgen.c (get_min_distance): the function now return direction
+	  of the quadratic bezier at the shortest point ( previously only
+	  returned for lines ).
+
+2020-05-24  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	* sdfgen.c (get_min_distance): added comment explaining the 
+	  entire procedure of calculating shortest distance from a 
+	  point to a cubic bezier curve.
+	* sdfgen.c (solve_quartic_equation): added function to solve
+	  a 4th degree polynomial equation.
+	* sdfgen.c (solve_quintic_equation): added function to solve
+	  a 5th degree polynomial equation. This is not complete yet.
+	  For now it only compute the range in which the roots lie.
+
+2020-05-20  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	* sdfgen.c (get_min_distance): fixed a calculation mistake for
+	  calculating shortest distance from a point to quadratic bezier
+	  curve. Instead of `c = B.B + A.p0 - A.p' the correct one will
+	  be `c = 2B.B + A.p0 - A.p'. Now the function works correctly.
+	  Also, the function now along with point on the curve return the
+	  direction of the curve at that point.
+
+2020-05-19  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	[sdf-outline] added algorithm to return find distance from
+	a point to a quadratic/conic bezier curve.
+
+	* sdfgen.c (get_min_distance): the function instead of the shortest
+	  distance value int `float', now returns the point int vector form
+	  on the curve which is at the least distance from a given point.
+	  Also the function now return shortest distance vector from a point
+	  to a quadratic bezier curve.
+	* sdfgen.c, sdfgen.h (solve_cubic_quation): added function to solve
+	  cubic equations.
+
+2020-05-18  Anuj Verma  <anujv@iitbhilai.ac.in>
+	
+	[sdf-outline] removed functionality to return signed distance 
+	from a point to a line.
+
+	* sdfgen.c (get_min_distance): the function no more returns
+	  signed distance. previously if two contour have connected 
+	  endpoints then the function may return positive as well as
+	  negative with equal distance for both the contour from
+	  specific point if the direction of the contours is different,
+	  then we can't decide  weather the the point is inside or outside
+	  the shape's outline. so, now the function only return unsigned
+	  distance and later we can decide the sign based  on the shortest
+	  distance.
+	* sdfgen.c, sdfgen.h (solve_quadratic_quation): added function to
+	  solve quadratic equations.
+
+2020-05-17  Anuj Verma  <anujv@iitbhilai.ac.in>
+	
+	[sdf-outline] added functionality to return signed distance 
+	from a point to a line.
+
+	* sdfgen.c (get_min_distance): the function now return signed
+	  distance from a point to a line. The sign is positive if the
+	  point lie inside the outline and negative otherwise.
+	  also written a comment explaining the procedure to find the
+	  shortest distance from a point to a quadratic bezier curve.
+	* sdfgen.c, sdfgen.h (sdf_vector_): added few more
+	  functions for easily manipulating the `SDF_Vector'.
+	* sdfgen.c, sdfgen.h, ChangeLog: changed `minimum distance'
+	  to `shortest distance'.
+
+2020-05-16  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	[sdf-outline] Added function to find the shortest distance 
+	from a point to a line (unsigned).
+
+	* sdfgen.c, sdfgen.h (get_min_distance): added function
+	  which determine the type of the contour and returns the
+	  shortest distance from a point to the contour. And 
+	  implemented shortest distance from a point to a line.
+	* sdfgen.c, sdfgen.h (sdf_vector_): added various functions
+	  for easily manipulating the `SDF_Vector'.
+
+2020-05-15  Anuj Verma  <anujv@iitbhilai.ac.in>
+	
+	* sdfgen.c: Fixed indentations and spacing to match
+	  FreeType's code style.
+
+2020-05-15  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	[sdf-outline] Added function to decompose outline.
+
+	Reduced all lines to 78 characters.
+
+	* sdfgen.c, sdfgen.h (SDF_Decompose_Outline): Added function 
+	  which use `FT_Outline_Decompose' to decompose and store it 
+	  in `SDF_Shape' struct. This will make iterating through the
+	  outline easier.
+	* sdfgen.c: Started using `FT_THROW' macro instead of return
+	  `FT_Error'.
+
+2020-05-14  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	[sdf-outline] Added more structures and helper functions.
+
+	* sdfgen.h (SDF_Shape): Added new structure.
+	* sdfgen.c: Added functions for initializing and deleting
+	  the SDF_ structures.
+
+2020-05-14  Anuj Verma  <anujv@iitbhilai.ac.in>
+
+	[sdf-outline] Added a few essintial private structures.
+
+	* sdfgen.h (SDF_Vector, SDF_Contour): Added new structures.
+	* sdfgen.h (SDF_Contour_Type): Added new enumeration.
