@@ -91,11 +91,11 @@ bool opengl_manager::init(int width, int height) {
 		void main() {
 			float color = texture(tex, pass_tex_coords).r;
 
-			frag_color = vec4(color);
+			frag_color = vec4(color < 0 ? -color : color);
 			frag_color.a = 1.0f;
 		}
 	)";
-	
+
 	const GLchar * sdf_fragment_shader_code = R"(
 		#version 330 core
 		out vec4 frag_color;
@@ -105,12 +105,11 @@ bool opengl_manager::init(int width, int height) {
 
 		in vec2 pass_tex_coords;
 
-		const float width = 0.0f;
+		const float width = 0.00f;
 		const float edge  = 0.01f;
 
 		void main() {
 			float distance = texture(tex, pass_tex_coords).r;
-
 			if (!show_rendered) {
 				frag_color = vec4(1.0f - abs(distance));
 				frag_color.a = 1.0f;

@@ -18,9 +18,11 @@ texture * demo::default_tex		= nullptr;
 texture * demo::sdf_tex			= nullptr;
 
 int demo::glyph_index			= 0;
-int demo::pixel_size			= 64;
+int demo::pixel_size			= 125;
 float demo::spread              = 10.0f;
 // ------------------------------------------------
+
+static int x[2] = { 0, 0 };
 
 void demo::init() {
 	FT_CALL(FT_Init_FreeType(&library));
@@ -32,10 +34,12 @@ void demo::init() {
 	FT_Bitmap sdf;
 	FT_Bitmap_Init(&sdf);
 
-	Generate_SDF(library, face->glyph, spread, &sdf);
+	Generate_SDF(library, face->glyph, &sdf);
 
 	sdf_tex = new texture(sdf.buffer, sdf.width, sdf.rows, GL_R32F, GL_RED, GL_FLOAT, GL_LINEAR);
-	default_tex = new texture(face->glyph->bitmap.buffer, face->glyph->bitmap.width, face->glyph->bitmap.rows, GL_RGBA, GL_RED, GL_UNSIGNED_BYTE, GL_NEAREST);
+	default_tex = new texture(face->glyph->bitmap.buffer, face->glyph->bitmap.width, face->glyph->bitmap.rows, GL_RGBA, GL_RED, GL_UNSIGNED_BYTE, GL_LINEAR);
+
+	FT_Bitmap_Done( library, &sdf );
 }
 
 void demo::update() {
@@ -60,6 +64,9 @@ void demo::gui() {
 		if (ImGui::SliderFloat("Spread", &spread, 1.0f, 100.0f)) {
 			update_glyph();
 		}
+		if (ImGui::DragInt2("Temp", x)) {
+			update_glyph();
+		}
 	}
 	ImGui::End();
 }
@@ -79,11 +86,15 @@ void demo::update_glyph() {
 	FT_Bitmap sdf;
 	FT_Bitmap_Init(&sdf);
 
-	Generate_SDF(library, face->glyph, spread, &sdf);
+	Generate_SDF(library, face->glyph, &sdf);
+
+	//((float *)sdf.buffer)[x[1] * sdf.width + x[0]] = 1.0f;
 
 	delete default_tex;
 	delete sdf_tex;
 
-	default_tex = new texture(face->glyph->bitmap.buffer, face->glyph->bitmap.width, face->glyph->bitmap.rows, GL_RGBA, GL_RED, GL_UNSIGNED_BYTE, GL_NEAREST);
+	default_tex = new texture(face->glyph->bitmap.buffer, face->glyph->bitmap.width, face->glyph->bitmap.rows, GL_RGBA, GL_RED, GL_UNSIGNED_BYTE, GL_LINEAR);
 	sdf_tex = new texture(sdf.buffer, sdf.width, sdf.rows, GL_R32F, GL_RED, GL_FLOAT, GL_LINEAR);
+
+	FT_Bitmap_Done( library, &sdf );
 }

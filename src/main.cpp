@@ -97,7 +97,7 @@ int main(int argc, char * argv[]) {
 
 	// main loop
 	while (!glfwWindowShouldClose(window)) {
-		glfwWaitEvents();
+		glfwPollEvents();
 
 		// clear the screen for drawing
 		GL_CALL(glClearColor(0.0f, 0.0f, 0.0f, 0.0f));
