@@ -114,9 +114,7 @@ bool opengl_manager::init(int width, int height) {
 				frag_color = vec4(1.0f - abs(distance));
 				frag_color.a = 1.0f;
 			} else {
-				if (distance > 0.0f) {
-					frag_color = vec4(1.0f);
-				} else {
+				{
 					float alpha = 1.0f - smoothstep(width, width + edge, -distance);
 					frag_color = vec4(alpha);
 					frag_color.a = 1.0f;

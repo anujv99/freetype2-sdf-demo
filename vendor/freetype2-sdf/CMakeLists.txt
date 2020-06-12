@@ -4,7 +4,7 @@ project(freetype2-sdf C)
 add_subdirectory(freetype)
 
 # add the source files
-add_library(freetype2-sdf STATIC src/sdfgen.c  )
+add_library(freetype2-sdf STATIC src/sdfgen.c   "src/ext.h")
 
 # add compile defination
 add_compile_definitions(FT2_BUILD_LIBRARY)

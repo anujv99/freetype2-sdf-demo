@@ -10,6 +10,7 @@
 // fonts
 #include "roboto.inl"
 #include "gkaiu59.inl"
+#include "martel.inl"
 
 // ------------------declarations------------------
 FT_Library demo::library		= nullptr;
@@ -17,8 +18,8 @@ FT_Face demo::face				= nullptr;
 texture * demo::default_tex		= nullptr;
 texture * demo::sdf_tex			= nullptr;
 
-int demo::glyph_index			= 0;
-int demo::pixel_size			= 125;
+int demo::glyph_index			= 53;
+int demo::pixel_size			= 57;
 float demo::spread              = 10.0f;
 // ------------------------------------------------
 
@@ -28,6 +29,7 @@ void demo::init() {
 	FT_CALL(FT_Init_FreeType(&library));
 	//FT_CALL(FT_New_Memory_Face(library, GKAIU59, GKAIU59_SIZE, 0, &face));
 	FT_CALL(FT_New_Memory_Face(library, ROBOTO_REGULAR, ROBOTO_REGULAR_SIZE, 0, &face));
+	//FT_CALL(FT_New_Memory_Face(library, MARTEL, MARTEL_SIZE, 0, &face));
 	FT_CALL(FT_Set_Pixel_Sizes(face, pixel_size, 0));
 	FT_CALL(FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER));
 
@@ -37,7 +39,7 @@ void demo::init() {
 	Generate_SDF(library, face->glyph, &sdf);
 
 	sdf_tex = new texture(sdf.buffer, sdf.width, sdf.rows, GL_R32F, GL_RED, GL_FLOAT, GL_LINEAR);
-	default_tex = new texture(face->glyph->bitmap.buffer, face->glyph->bitmap.width, face->glyph->bitmap.rows, GL_RGBA, GL_RED, GL_UNSIGNED_BYTE, GL_LINEAR);
+	default_tex = new texture(face->glyph->bitmap.buffer, face->glyph->bitmap.width, face->glyph->bitmap.rows, GL_RGBA, GL_RED, GL_UNSIGNED_BYTE, GL_NEAREST);
 
 	FT_Bitmap_Done( library, &sdf );
 }
@@ -93,7 +95,7 @@ void demo::update_glyph() {
 	delete default_tex;
 	delete sdf_tex;
 
-	default_tex = new texture(face->glyph->bitmap.buffer, face->glyph->bitmap.width, face->glyph->bitmap.rows, GL_RGBA, GL_RED, GL_UNSIGNED_BYTE, GL_LINEAR);
+	default_tex = new texture(face->glyph->bitmap.buffer, face->glyph->bitmap.width, face->glyph->bitmap.rows, GL_RGBA, GL_RED, GL_UNSIGNED_BYTE, GL_NEAREST);
 	sdf_tex = new texture(sdf.buffer, sdf.width, sdf.rows, GL_R32F, GL_RED, GL_FLOAT, GL_LINEAR);
 
 	FT_Bitmap_Done( library, &sdf );

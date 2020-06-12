@@ -33,8 +33,10 @@ FT_BEGIN_HEADER
   /* inside or outside the shape's outline         */
   typedef struct SDF_Signed_Distance_
   {
-    FT_Int       sign;           /* weather outside or inside    */
-    FT_Fixed     distance;       /* magnitude of `nearest_point' */
+    FT_Int      sign;           /* weather outside or inside     */
+    FT_Fixed    distance;       /* magnitude of `nearest_point'  */
+    FT_Vector   norm_direction; /* normalized direction at point */
+    FT_Vector   distance_vec;   /* ditance vector                */
 
   } SDF_Signed_Distance;
 
@@ -128,6 +130,19 @@ FT_BEGIN_HEADER
    * Math functions
    *
    */
+
+  FT_LOCAL( FT_UShort )
+  solve_quadratic_equation( FT_Fixed  a,
+                            FT_Fixed  b,
+                            FT_Fixed  c,
+                            FT_Fixed  out[2] );
+
+  FT_LOCAL( FT_UShort )
+  solve_cubic_equation( FT_Fixed  a,
+                        FT_Fixed  b,
+                        FT_Fixed  c,
+                        FT_Fixed  d,
+                        FT_Fixed  out[3] );
 
   /* returns the orientation of the contour the orintation */
   /* is determined by calculating the area of the control  */
