@@ -18,8 +18,8 @@ FT_Face demo::face				= nullptr;
 texture * demo::default_tex		= nullptr;
 texture * demo::sdf_tex			= nullptr;
 
-int demo::glyph_index			= 53;
-int demo::pixel_size			= 57;
+int demo::glyph_index			= 0;
+int demo::pixel_size			= 56;
 float demo::spread              = 10.0f;
 // ------------------------------------------------
 
