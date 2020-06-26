@@ -30,6 +30,7 @@
   FT_EXPORT_DEF( FT_Error )
   Generate_SDF( FT_Library     library,
                 FT_GlyphSlot   glyph,
+                FT_UInt        spread,
                 FT_Bitmap     *abitmap )
   {
 
@@ -63,8 +64,11 @@
     width =  FT_ABS( ROUND_F26DOT6( cBox.xMax - cBox.xMin ) );
     height = FT_ABS( ROUND_F26DOT6( cBox.yMax - cBox.yMin ) );
 
-    x_pad = width / 4;
-    y_pad = height / 4;
+    if ( width == 0 || height == 0 )
+      return FT_THROW( Invalid_Argument );
+
+    x_pad = 2 * spread * 64;
+    y_pad = 2 * spread * 64;
 
     width += x_pad;
     height += y_pad;
@@ -91,19 +95,32 @@
     /* distance from the pixel's position to the nearest edge       */
     {
       FT_Memory      memory       = library->memory;
-      FT_UInt        i            = 0u;
-      FT_UInt        j            = 0u;
 
       float*     temp_buffer  = NULL;
-      float      max_udist    = 0.0f; /* used to normalize values   */
+      FT_Fixed   max_udist    = 0.0f; /* used to normalize values   */
+      FT_Char*   c_buffer     = NULL;
 
+      FT_Fixed*  f_buffer = NULL;      
 
       FT_MEM_ALLOC( temp_buffer, width * height * sizeof( float ) );
+      FT_MEM_ALLOC( f_buffer, width * height * sizeof( FT_Fixed ) );
+      FT_MEM_ALLOC( c_buffer, width * height * sizeof( FT_Char ) );
 
-      for ( j = 0; j < height; j++ )
+      memset( f_buffer, 127, width * height * sizeof( FT_Fixed ) );
+      memset( c_buffer, 0,  width * height * sizeof( FT_Char ) );
+      memset( temp_buffer, INT_MAX, width * height * sizeof( float ) );
+
+#if 0
+
+      for ( unsigned int j = 0; j < height; j++ )
       {
-        for ( i = 0; i < width; i++ )
+        for ( unsigned int i = 0; i < width; i++ )
         {
+          if ( i == 1 && j == 24 )
+          {
+            int aa = 0;
+          }
+
           FT_ULong      index = j * width + i;
 
           SDF_Contour*  head;        /* used to iterate            */
@@ -125,7 +142,7 @@
             FT_Fixed              udist;
 
 
-            error = get_min_conour( head, current_pos, &dist );
+            error = get_min_contour( head, current_pos, &dist );
             if ( error != FT_Err_Ok )
             {
               FT_MEM_FREE( temp_buffer );
@@ -138,12 +155,80 @@
             head = head->next;
           }
 
+          if ( min_dist.distance > spread * 65536 )
+            min_dist.distance = spread * 65536;
 
           temp_buffer[index] = ( float )min_dist.distance / 65536.0f;
+          temp_buffer[index] = sqrtf( temp_buffer[index] );
           if ( max_udist < temp_buffer[index] ) max_udist = temp_buffer[index];
           temp_buffer[index] *= min_dist.sign;
         }
       }
+
+#else
+
+      {
+        SDF_Contour*  contour = shape.head;
+
+
+        while ( contour != NULL )
+        {
+          SDF_Edge*  edge = contour->head;
+
+
+          while ( edge != NULL )
+          {
+            FT_BBox    bBox;
+
+
+            bBox.xMin = edge->start_pos.x < edge->end_pos.x ? edge->start_pos.x : edge->end_pos.x;
+            bBox.xMax = edge->start_pos.x > edge->end_pos.x ? edge->start_pos.x : edge->end_pos.x;
+
+            bBox.yMin = edge->start_pos.y < edge->end_pos.y ? edge->start_pos.y : edge->end_pos.y;
+            bBox.yMax = edge->start_pos.y > edge->end_pos.y ? edge->start_pos.y : edge->end_pos.y;
+
+            bBox.xMin -= spread * 64;
+            bBox.xMax += spread * 64;
+
+            bBox.yMin -= spread * 64;
+            bBox.yMax += spread * 64;
+
+            for ( unsigned int j = ROUND_F26DOT6( bBox.yMin ) / 64; j < ROUND_F26DOT6( bBox.yMax ) / 64; j++ )
+            {
+              for ( unsigned int i = ROUND_F26DOT6( bBox.xMin ) / 64; i < ROUND_F26DOT6( bBox.xMax ) / 64; i++ )
+              {
+                if ( i < 0 || i >= width ) continue;
+                if ( j < 0 || j >= height ) continue;
+
+                
+
+                FT_Vector  cpoint = { i * 64, j * 64 };
+                FT_UInt  index = 0;
+                SDF_Signed_Distance  dist;
+
+                index = ( height - j - 1 ) * width + i;
+
+                get_min_distance( edge, cpoint, &dist );
+
+                if ( dist.distance < f_buffer[index] )
+                {
+                  f_buffer[index] = dist.distance;
+                  c_buffer[index] = dist.sign;
+                  if ( dist.distance > max_udist ) max_udist = dist.distance;
+                }
+              }
+            }
+
+            edge = edge->next;
+          }
+
+          contour = contour->next;
+        }
+
+      }
+
+
+#endif
 
       /* release the previous buffer */
       FT_Bitmap_Done( library, abitmap );
@@ -154,12 +239,36 @@
       abitmap->num_grays   = 256;
       abitmap->pixel_mode  = 0;
 
-      /* normalize the values and put in the buffer */
-      for ( i = 0; i < width * height; i++ )
+      /* scan the bitmap and determine the correct sign */
+      for ( unsigned int j = 0; j < height; j++ )
       {
-        temp_buffer[i] = ( temp_buffer[i] ) / max_udist;
+        FT_Char ongoing_sign = -1; /* start from outside the pixel */
+        for ( unsigned int i = 0; i < width; i++ )
+        {
+          FT_UInt  index = j * width + i;
+
+          //printf("%c ", c_buffer[index]);
+
+          if ( c_buffer[index] != 0 ) ongoing_sign = c_buffer[index];
+          else c_buffer[index] = ongoing_sign;
+        }
+        //printf("\n");
       }
 
+      if ( max_udist > spread * spread * 65536 ) max_udist = spread * spread * 65536;
+
+      /* normalize the values and put in the buffer */
+      for ( unsigned int i = 0; i < width * height; i++ )
+      {
+        if ( f_buffer[i] > spread * spread * 65536 ) f_buffer[i] = spread * spread * 65536;
+
+        f_buffer[i] = FT_DivFix( f_buffer[i], max_udist );
+        f_buffer[i] = square_root( f_buffer[i] ) * c_buffer[i];
+
+        temp_buffer[i] = (float)f_buffer[i] / 65536.0f;
+      }
+
+      FT_FREE( f_buffer );
       abitmap->buffer = ( unsigned char* )temp_buffer;
     }
 
@@ -177,12 +286,13 @@
    */
 
   static
-  const SDF_Edge  null_sdf_edge = { { 0.0f, 0.0f }, { 0.0f, 0.0f },
-                                    { 0.0f, 0.0f }, { 0.0f, 0.0f },
-                                    SDF_EDGE_TYPE_NONE, NULL };
+  const SDF_Edge  null_sdf_edge = { { 0, 0 }, { 0, 0 },
+                                    { 0, 0 }, { 0, 0 },
+                                    SDF_EDGE_TYPE_NONE, NULL,
+                                    { 0, 0 }, { 0, 0 }, { 0, 0 } };
 
   static
-  const SDF_Contour null_sdf_contour = { { 0.0f, 0.0f }, 
+  const SDF_Contour null_sdf_contour = { { 0, 0 }, 
                                          SDF_CONTOUR_ORIENTATION_NONE,
                                          NULL, 0u };
 
@@ -306,6 +416,10 @@
       edge->end_pos       = endpoint;
       edge->edge_type     = SDF_EDGE_TYPE_LINE;
 
+      /* precomputed data */
+      edge->aA.x = endpoint.x - edge->start_pos.x;
+      edge->aA.y = endpoint.y - edge->start_pos.y;
+
       /* add the edge to contour */
       if ( contour->head )
         edge->next = contour->head;
@@ -317,6 +431,10 @@
 
     return error;
   }
+
+#if 1
+
+  /* un-subdivided version */
 
   static int
   sdf_outline_conic_to( const FT_Vector*  control1,
@@ -344,6 +462,13 @@
     edge->control_point_a  = control;
     edge->edge_type        = SDF_EDGE_TYPE_QUADRATIC_BEZIER;
 
+    /* precomputed data */
+    edge->aA.x = contour->last_pos.x - 2 * control.x + endpoint.x;
+    edge->aA.y = contour->last_pos.y - 2 * control.y + endpoint.y;
+
+    edge->bB.x = control.x - contour->last_pos.x;
+    edge->bB.y = control.y - contour->last_pos.y;
+
     /* add the edge to contour */
     if ( contour->head )
       edge->next = contour->head;
@@ -354,6 +479,52 @@
 
     return error;
   }
+
+#else
+
+  /* subdivided version */
+
+  static int
+  sdf_outline_conic_to( const FT_Vector*  control1,
+                        const FT_Vector*  to,
+                        void*             user )
+  {
+    SDF_Shape*    shape     = ( SDF_Shape* )user;
+    SDF_Contour*  contour   = shape->head;
+    FT_Vector     endpoint  = *to;
+    FT_Vector     control   = *control1;
+    FT_Vector     start     = contour->last_pos;
+    SDF_Edge      edge      = null_sdf_edge;
+
+    FT_Memory     memory    = shape->memory;
+    FT_Error      error     = FT_Err_Ok;
+
+    /* precomputed data */
+    edge.aA.x = contour->last_pos.x - 2 * control.x + endpoint.x;
+    edge.aA.y = contour->last_pos.y - 2 * control.y + endpoint.y;
+
+    edge.bB.x = control.x - contour->last_pos.x;
+    edge.bB.y = control.y - contour->last_pos.y;
+
+    for ( unsigned int i = 0; i <= 16; i++ )
+    {
+      FT_Fixed  factor = ( i << 16 ) / 16;
+      FT_Fixed  factor2 = FT_MulFix( factor, factor );
+      FT_Vector point = zero_vector;
+
+
+      point.x = FT_MulFix( factor2, edge.aA.x ) + 
+                2 * FT_MulFix( factor, edge.bB.x ) + start.x;
+      point.y = FT_MulFix( factor2, edge.aA.y ) + 
+                2 * FT_MulFix( factor, edge.bB.y ) + start.y;
+
+      sdf_outline_line_to( &point, user );
+    }
+
+    return error;
+  }
+
+#endif
 
   static int
   sdf_outline_cubic_to( const FT_Vector*  control1,
@@ -384,6 +555,15 @@
     edge->control_point_a  = control_a;
     edge->control_point_b  = control_b;
     edge->edge_type        = SDF_EDGE_TYPE_CUBIC_BEZIER;
+
+    edge->aA.x = -contour->last_pos.x  + 3 * ( control_a.x - control_b.x ) + endpoint.x;
+    edge->aA.y = -contour->last_pos.y  + 3 * ( control_a.y - control_b.y ) + endpoint.y;
+
+    edge->bB.x = 3 * ( contour->last_pos.x - 2 * control_a.x + control_b.x );
+    edge->bB.y = 3 * ( contour->last_pos.y - 2 * control_a.y + control_b.y );
+
+    edge->cC.x = 3 * ( control_a.x - contour->last_pos.x );
+    edge->cC.y = 3 * ( control_a.y - contour->last_pos.y );
 
     /* add the edge to contour */
     if ( contour->head )
@@ -647,12 +827,12 @@
   }
 
   FT_LOCAL_DEF( FT_Error )
-  get_min_conour( SDF_Contour*          contour,
-                  const FT_26D6Vec      point,
-                  SDF_Signed_Distance  *out )
+  get_min_contour( SDF_Contour*          contour,
+                   const FT_26D6Vec      point,
+                   SDF_Signed_Distance  *out )
   {
     SDF_Edge*             head;
-    SDF_Signed_Distance   min_dist;
+    SDF_Signed_Distance   min_dist = { 0 };
 
     FT_Error              error    = FT_Err_Ok;
     FT_Fixed              epsilon  = ( 1 << 10 );
@@ -683,13 +863,16 @@
       
         FT_Vector    norm1    = zero_vector;
         FT_Vector    norm2    = zero_vector;
-        FT_Vector    temp     = zero_vector;
+        FT_Vector    temp1    = zero_vector;
+        FT_Vector    temp2    = zero_vector;
 
-        temp.x = min_dist.distance_vec.x - dist.distance_vec.x;
-        temp.y = min_dist.distance_vec.y - dist.distance_vec.y;
+        temp1.x = min_dist.distance_vec.x / 1024 - point.x;
+        temp1.y = min_dist.distance_vec.y / 1024 - point.y;
 
-        if ( min_dist.distance == dist.distance ||
-              FT_Vector_Length( &temp ) <= ( 1 << 10 ) )
+        temp2.x = dist.distance_vec.x / 1024 - point.x;
+        temp2.y = dist.distance_vec.y / 1024 - point.y;
+
+        if ( min_dist.distance == dist.distance || ( temp1.x == temp2.x && temp1.y == temp2.y ) )
         {
           if ( min_dist.sign != dist.sign  )
           {
@@ -778,7 +961,7 @@
       const FT_Vector   a                      = edge->start_pos;
       const FT_Vector   b                      = edge->end_pos;
       const FT_Vector   p                      = point;
-      FT_Vector         line_segment           = zero_vector;
+      FT_Vector         line_segment           = edge->aA;
       FT_Vector         p_sub_a                = zero_vector;
 
       FT_Vector         nearest_point          = zero_vector;
@@ -791,14 +974,11 @@
       p_sub_a.x = p.x - a.x;
       p_sub_a.y = p.y - a.y;
 
-      line_segment.x = b.x - a.x;
-      line_segment.y = b.y - a.y;
+      line_length = ( line_segment.x * line_segment.x ) +
+                    ( line_segment.y * line_segment.y );
 
-      line_length = FT_Vector_Length( &line_segment );
-      line_length = ( line_length * line_length ) / 64;
-
-      factor = ( p_sub_a.x * line_segment.x ) / 64 +
-               ( p_sub_a.y * line_segment.y ) / 64;
+      factor = ( p_sub_a.x * line_segment.x ) +
+               ( p_sub_a.y * line_segment.y );
 
       factor = FT_DivFix( factor, line_length );
 
@@ -816,28 +996,26 @@
       nearest_point.x = a.x * 1024 + line_segment.x - p.x * 1024;
       nearest_point.y = a.y * 1024 + line_segment.y - p.y * 1024;
 
-      out->distance = FT_Vector_Length( &nearest_point );
+      out->distance = FT_MulFix( nearest_point.x, nearest_point.x ) +
+                      FT_MulFix( nearest_point.y, nearest_point.y );
       out->distance_vec = nearest_point;
 
-      line_segment.x = b.x - a.x;
-      line_segment.y = b.y - a.y;
-
-      FT_Vector_NormLen( &line_segment );
-      out->norm_direction = line_segment;
-
-      FT_Vector_NormLen( &nearest_point );
+      line_segment = edge->aA;
 
       cross = FT_MulFix( nearest_point.x, line_segment.y ) -
               FT_MulFix( nearest_point.y, line_segment.x );
 
       out->sign = cross < 0 ? 1 : -1;
 
+      FT_Vector_NormLen( &line_segment );
+      out->norm_direction = line_segment;
+
       break;
     }
     case SDF_EDGE_TYPE_QUADRATIC_BEZIER:
     {
       /* the procedure to find the shortest distance from a point to */
-      /* a quadratic bezier curve is simliar to a line segment. the  */
+      /* a quadratic bezier curve is similar to a line segment. the  */
       /* shortest distance will be perpendicular to the bezier curve */
       /* The only difference from line is that there can be more     */
       /* than one perpendicular and we also have to check the endpo- */
@@ -881,9 +1059,8 @@
       /*                                                             */
       /* [note]: B and B( t ) are different in the above equations   */
 
-      FT_Vector  aA             = zero_vector;
-      FT_Vector  bB             = zero_vector;
-      FT_Vector  cC             = zero_vector;
+      FT_Vector  aA             = edge->aA;
+      FT_Vector  bB             = edge->bB;
       FT_Vector  nearest_point  = zero_vector;
       FT_Vector  temp           = zero_vector;
 
@@ -898,20 +1075,13 @@
       FT_Fixed   d              = 0;
       FT_Fixed   min            = INT_MAX;
 
-      FT_Fixed   roots[5]       = { 0, 0, 0, 0, 0 };
+      FT_Fixed   roots[3]       = { 0, 0, 0 };
 
       FT_Fixed   min_factor     = 0;
       FT_Fixed   cross          = 0;
 
       FT_UShort  num_roots      = 0;
       FT_UShort  i              = 0;
-
-
-      aA.x = p0.x - 2 * p1.x + p2.x;
-      aA.y = p0.y - 2 * p1.y + p2.y;
-
-      bB.x = p1.x - p0.x;
-      bB.y = p1.y - p0.y;
 
       a  = ( aA.x * aA.x ) / 64 +
            ( aA.y * aA.y ) / 64;
@@ -933,11 +1103,7 @@
       d -= ( p.x * bB.x )  / 64 +
            ( p.y * bB.y )  / 64;
 
-      num_roots = solve_cubic_equation( a, b, c, d, roots + 2 );
-
-      roots[0] = 0;
-      roots[1] = 1 << 16;
-      num_roots += 2;
+      num_roots = solve_cubic_equation( a, b, c, d, roots );
 
       for ( i = 0; i < num_roots; i++ )
       {
@@ -949,8 +1115,16 @@
 
 
         /* only check of t in range [0.0f, 1.0f] */
-        if ( t < 0 || t > ( 1 << 16 ) )
-          continue;
+        if ( t < 0 )
+        {
+          t = 0;
+          t2 = 0;
+        }
+        if ( t > ( 1 << 16 ) )
+        {
+          t = ( 1 << 16 );
+          t2 = ( 1 << 16 );
+        }
 
         /* B( t ) = t^2( A ) + 2t( B ) + p0 - p */
         curve_point.x = FT_MulFix( aA.x * 1024, t2 ) +
@@ -962,7 +1136,8 @@
         curve_point.y -= p.y * 1024;
 
         /* compute distance from `point' to the `curve_point' */
-        dist = FT_Vector_Length( &curve_point );
+        dist = FT_MulFix( curve_point.x, curve_point.x ) +
+               FT_MulFix( curve_point.y, curve_point.y ) ;
 
         if ( dist < min )
         {
@@ -972,20 +1147,18 @@
         }
       }
 
-      out->distance = FT_Vector_Length( &nearest_point );
+      out->distance = min;
       out->distance_vec = nearest_point;
 
       /* determine the sign */
       temp.x = 2 * FT_MulFix( aA.x * 1024, min_factor ) + 2 * bB.x * 1024;
       temp.y = 2 * FT_MulFix( aA.y * 1024, min_factor ) + 2 * bB.y * 1024;
 
-      FT_Vector_NormLen( &temp );
-      FT_Vector_NormLen( &nearest_point );
-
       cross = FT_MulFix( nearest_point.x, temp.y ) -
               FT_MulFix( nearest_point.y, temp.x );
 
       out->sign = cross < 0 ? 1 : -1;
+      FT_Vector_NormLen( &temp );
       out->norm_direction = temp;
 
       break;
@@ -1059,9 +1232,9 @@
       /*                                                             */
       /* [note]: B and B( t ) are different in the above equations   */
 
-      FT_Vector  aA             = zero_vector;
-      FT_Vector  bB             = zero_vector;
-      FT_Vector  cC             = zero_vector;
+      FT_Vector  aA             = edge->aA;
+      FT_Vector  bB             = edge->bB;
+      FT_Vector  cC             = edge->cC;
       FT_Vector  dD             = zero_vector;
       FT_Vector  nearest_point  = zero_vector;
       FT_Vector  direction      = zero_vector;
@@ -1083,15 +1256,6 @@
       const FT_UShort  MAX_STEPS      = 4;
       const FT_UShort  MAX_DIVISIONS  = 4;
 
-
-      aA.x = -p0.x + 3 * ( p1.x - p2.x ) + p3.x;
-      aA.y = -p0.y + 3 * ( p1.y - p2.y ) + p3.y;
-
-      bB.x = 3 * ( p0.x - 2 * p1.x + p2.x );
-      bB.y = 3 * ( p0.y - 2 * p1.y + p2.y );
-
-      cC.x = 3 * ( p1.x - p0.x );
-      cC.y = 3 * ( p1.y - p0.y );
 
       dD.x = p0.x - p.x;
       dD.y = p0.y - p.y;
@@ -1119,7 +1283,8 @@
           p_to_c.y = FT_MulFix( aA.y, factor3 ) + FT_MulFix( bB.y, factor2 ) +
                      FT_MulFix( cC.y, factor ) + dD.y;
 
-          length = FT_Vector_Length( &p_to_c );
+          length = FT_MulFix( p_to_c.x * 1024, p_to_c.x * 1024 ) +
+                   FT_MulFix( p_to_c.y * 1024, p_to_c.y * 1024 );
 
           if ( length < min_distance )
           {
@@ -1129,9 +1294,9 @@
             nearest_point = p_to_c;
           }
 
-          d1.x = FT_MulFix( aA.x, 3 * factor2 ) + 
+          d1.x = FT_MulFix( aA.x, 3 * factor2 ) +
                  FT_MulFix( bB.x, 2 * factor ) + cC.x;
-          d1.y = FT_MulFix( aA.y, 3 * factor2 ) + 
+          d1.y = FT_MulFix( aA.y, 3 * factor2 ) +
                  FT_MulFix( bB.y, 2 * factor ) + cC.y;
 
           d2.x = FT_MulFix( aA.x, 6 * factor ) + 2 * bB.x;
@@ -1157,18 +1322,18 @@
       nearest_point.y *= 1024;
 
       out->distance_vec = nearest_point;
-      out->distance = FT_Vector_Length( &nearest_point );
+      out->distance = min_distance;
 
       direction.x = FT_MulFix( aA.x, 3 * min_factor_sq ) +
                     FT_MulFix( bB.x, 2 *min_factor ) + cC.x;
       direction.y = FT_MulFix( aA.y, 3 * min_factor_sq ) +
                     FT_MulFix( bB.y, 2 *min_factor ) + cC.y;
 
-      FT_Vector_NormLen( &direction );
-      out->norm_direction = direction;
-
       cross = FT_MulFix( nearest_point.x, direction.y ) -
               FT_MulFix( nearest_point.y, direction.x );
+
+      FT_Vector_NormLen( &direction );
+      out->norm_direction = direction;
 
       out->sign = cross < 0 ? 1 : -1;
 
@@ -1179,6 +1344,67 @@
     }
 
     return error;
+  }
+
+  FT_LOCAL_DEF( FT_Vector )
+  get_edge_point( SDF_Edge*  edge,
+                  FT_Fixed   factor )
+  {
+    FT_Vector  out = zero_vector;
+
+
+    if ( factor > ( 1 << 16 ) )
+      factor = ( 1 << 16 );
+    if ( factor < 0 )
+      factor = 0;
+
+    switch (edge->edge_type) {
+    case SDF_EDGE_TYPE_LINE:
+    {
+      FT_Vector  delta;
+
+
+      delta.x = FT_MulFix( edge->aA.x, factor );
+      delta.y = FT_MulFix( edge->aA.y, factor );
+
+      out.x = edge->start_pos.x + delta.x;
+      out.y = edge->start_pos.y + delta.y;
+
+      break;
+    }
+    case SDF_EDGE_TYPE_QUADRATIC_BEZIER:
+    {
+      FT_Vector  p0      = edge->start_pos;
+      FT_Fixed   factor2 = 0;
+
+
+      factor2 = FT_MulFix( factor2, factor2 );
+
+      out.x = FT_MulFix( edge->aA.x, factor2 ) + 2 * FT_MulFix( edge->bB.x, factor ) + p0.x;
+      out.y = FT_MulFix( edge->aA.y, factor2 ) + 2 * FT_MulFix( edge->bB.y, factor ) + p0.y;
+
+      break;
+    }
+    case SDF_EDGE_TYPE_CUBIC_BEZIER:
+    {
+      FT_Vector  p0      = edge->start_pos;
+      FT_Fixed   factor2 = 0;
+      FT_Fixed   factor3 = 0;
+
+
+      factor2 = FT_MulFix( factor2, factor2 );
+      factor3 = FT_MulFix( factor2, factor );
+
+      out.x = FT_MulFix( edge->aA.x, factor3 ) + FT_MulFix( edge->bB.x, factor2 ) + FT_MulFix( edge->cC.x, factor ) + p0.x;
+      out.y = FT_MulFix( edge->aA.y, factor3 ) + FT_MulFix( edge->bB.y, factor2 ) + FT_MulFix( edge->cC.y, factor ) + p0.y;
+
+      break;
+    }
+    default:
+        break;
+    }
+
+    return out;
   }
 
 /* END */

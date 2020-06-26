@@ -15,6 +15,8 @@
 #include "openglmanager.h"
 #include "demo.h"
 
+#include <sdfgen.h>
+
 #define GLFW_ERR()\
 	const char * error = NULL;\
 	glfwGetError(&error)
@@ -70,7 +72,7 @@ int main(int argc, char * argv[]) {
 	}
 
 	// initialize openglmanager
-	if (!opengl_manager::init(500, 500)) {
+	if (!opengl_manager::init(900, 900)) {
 		return -1;
 	}
 
@@ -94,6 +96,33 @@ int main(int argc, char * argv[]) {
 
 	// disable v-sync
 	glfwSwapInterval(0);
+
+	auto start = glfwGetTime();
+
+	//for ( signed long i = 0; i < 1000000; i++ )
+	//{
+	//	SDF_Edge edge;
+	//	edge.start_pos = { i, -i };
+	//	edge.end_pos = { -i, i };
+	//	edge.control_point_a = { -i * 10, i * 5 };
+	//	edge.control_point_b = { i * 5, -i * 10 };
+	//
+	//	edge.edge_type = SDF_EDGE_TYPE_CUBIC_BEZIER;
+	//
+	//	FT_Vector pos;
+	//	pos.x = i;
+	//	pos.y = i;
+	//
+	//	SDF_Signed_Distance dist;
+	//
+	//	get_min_distance(&edge, pos, &dist);
+	//}
+
+	auto end = glfwGetTime();
+
+	LOG_INFO("Time: %f", end - start);
+
+	//return 0;
 
 	// main loop
 	while (!glfwWindowShouldClose(window)) {

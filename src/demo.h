@@ -24,7 +24,7 @@ private:
 
 	static int glyph_index;
 	static int pixel_size;
-	static float spread;
+	static int spread;
 };
 
 #endif //_DEMO_H_

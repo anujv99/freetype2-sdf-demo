@@ -18,6 +18,7 @@ FT_BEGIN_HEADER
   FT_EXPORT( FT_Error )
   Generate_SDF( FT_Library     library,
                 FT_GlyphSlot   glyph,
+                FT_UInt        spread,
                 FT_Bitmap     *abitmap );
 
 
@@ -69,6 +70,11 @@ FT_BEGIN_HEADER
     SDF_Edge_Type         edge_type;        /* edge identifier             */
 
     struct SDF_Edge_*     next;             /* to create a linked list     */
+
+    /* precomputed coeeficients */
+    FT_Vector             aA;
+    FT_Vector             bB;
+    FT_Vector             cC;
 
   } SDF_Edge;
 
@@ -143,6 +149,10 @@ FT_BEGIN_HEADER
                         FT_Fixed  c,
                         FT_Fixed  d,
                         FT_Fixed  out[3] );
+
+  FT_LOCAL( FT_Vector )
+  get_edge_point( SDF_Edge*  edge,
+                  FT_Fixed   factor );
 
   /* returns the orientation of the contour the orintation */
   /* is determined by calculating the area of the control  */

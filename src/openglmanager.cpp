@@ -16,6 +16,9 @@ glm::mat4 opengl_manager::projection	= glm::mat4(1.0f);
 float opengl_manager::zoom				= 1.0f;
 glm::vec2 opengl_manager::offset        = glm::vec2(0.0f);
 bool opengl_manager::show_rendered      = false;
+
+static float swidth = 0.0f;
+static float sedge  = 0.1f;
 // ------------------------------------------------
 
 static bool check_shader_compile_status(GLuint shader) {
@@ -105,8 +108,8 @@ bool opengl_manager::init(int width, int height) {
 
 		in vec2 pass_tex_coords;
 
-		const float width = 0.00f;
-		const float edge  = 0.01f;
+		uniform float width = 0.00f;
+		uniform float edge  = 0.01f;
 
 		void main() {
 			float distance = texture(tex, pass_tex_coords).r;
@@ -293,6 +296,22 @@ void opengl_manager::gui() {
 				GL_CALL(glUniform1i(location, show_rendered));
 			}
 
+			GL_CALL(glUseProgram(0));
+		}
+
+		if (ImGui::DragFloat("Width", &swidth, 0.01f, 0.0f)) {
+			GL_CALL(glUseProgram(shader_programs[SDF_SHADER]));
+			GLuint location = GL_CALL(glGetUniformLocation(shader_programs[SDF_SHADER], "width"));
+
+			GL_CALL(glUniform1f(location, swidth));
+			GL_CALL(glUseProgram(0));
+		}
+
+		if (ImGui::DragFloat("Edge", &sedge, 0.01f, 0.0f)) {
+			GL_CALL(glUseProgram(shader_programs[SDF_SHADER]));
+			GLuint location = GL_CALL(glGetUniformLocation(shader_programs[SDF_SHADER], "edge"));
+
+			GL_CALL(glUniform1f(location, sedge));
 			GL_CALL(glUseProgram(0));
 		}
 
